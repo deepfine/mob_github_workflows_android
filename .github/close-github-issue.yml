@@ -1,0 +1,53 @@
+name: Close Github issue
+
+on:
+  workflow_call:
+    secrets:
+      ANDROID_GITHUB_ISSUE_CLOSE:
+        required: true
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  close-github-issue:
+    if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'develop' }}
+    runs-on: self-hosted
+    steps:
+      - name: Find Jira key and close matching issue
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.ANDROID_GITHUB_ISSUE_CLOSE }}
+          script: |
+            const pr = context.payload.pull_request;
+
+            const text = `${pr.head.ref}\n${pr.title}`;
+            const fromBranch = pr.head.ref.match(/\/([A-Z][A-Z0-9]+-\d+)(?:-|$)/); // 예: feature/DF-1-xxx
+            const fromTitle = pr.title.match(/\b([A-Z][A-Z0-9]+-\d+)\b/);          // 예: [DF-1] xxx
+            const jiraKey = (fromBranch?.[1] || fromTitle?.[1]);
+
+            if (!jiraKey) {
+              core.info("No Jira key found in branch name or PR title.");
+              return;
+            }
+
+            core.info(`Jira key: ${jiraKey}`);
+
+            const q = `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:title ${jiraKey}`;
+            const res = await github.rest.search.issuesAndPullRequests({ q, per_page: 10 });
+
+            const issue = res.data.items.find(i => !i.pull_request);
+            if (!issue) {
+              core.info(`No open issue found with Jira key ${jiraKey} in title.`);
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: "closed",
+            });
+
+            core.info(`Closed issue #${issue.number} matched by ${jiraKey}`);
