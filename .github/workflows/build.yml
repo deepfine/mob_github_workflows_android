@@ -19,7 +19,7 @@ jobs:
 
       - name: Make Gradle executable
         run: |
-          sed -i '' 's/\r$//' gradlew
+          tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
           chmod +x ./gradlew
 
       - name: Spotless
