@@ -1,0 +1,74 @@
+name: Generated AAB
+
+env:
+  main_project_module: app
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set current date as env variable
+        run: echo "date_today=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: Set repository name as env variable
+        run: echo "repository_name=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')" >> $GITHUB_ENV
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradle executable
+        run: |
+          tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
+          chmod +x ./gradlew
+
+      - name: Build app bundle release (AAB) - ${{ env.main_project_module }} module
+        run: ./gradlew ${{ env.main_project_module }}:bundleProdRelease
+
+      - name: Upload AAB (App Bundle) Release - ${{ env.repository_name }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.date_today }} - ${{ env.repository_name }} - App bundle(s) AAB release generated
+          path: ${{ env.main_project_module }}/build/outputs/bundle/prodRelease/
+
+      - name: Locate AAB file
+        id: find_aab
+        shell: bash
+        run: |
+          AAB=$(ls ${{ env.main_project_module }}/build/outputs/bundle/prodRelease/*.aab | head -n 1)
+          if [ -z "$AAB" ]; then
+            echo "No AAB found"; exit 1
+          fi
+          echo "AAB_PATH=$AAB" >> $GITHUB_ENV
+          echo "aab_path=$AAB" >> $GITHUB_OUTPUT
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: release
+
+      - name: Create GitHub Release and upload AAB
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            ${{ env.AAB_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
