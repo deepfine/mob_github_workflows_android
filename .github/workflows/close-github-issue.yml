@@ -42,6 +42,13 @@ jobs:
               core.info(`No open issue found with Jira key ${jiraKey} in title.`);
               return;
             }
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `Pull Request Merged : #${pr.number}`
+            });
 
             await github.rest.issues.update({
               owner: context.repo.owner,
