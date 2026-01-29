@@ -75,7 +75,7 @@ jobs:
               description: $description
             }'
           )
-          [ -n "$ASSIGNEE_ACCOUNT_ID" ] && FIELDS=$(echo "$FIELDS" | jq --arg assignee "$ASSIGNEE_ACCOUNT_ID" -c '. + { priority: { name: $assignee} }')
+          [ -n "$ASSIGNEE_ACCOUNT_ID" ] && FIELDS=$(echo "$FIELDS" | jq --arg assignee "$ASSIGNEE_ACCOUNT_ID" -c '. + { assignee: { id: $assignee} }')
           [ -n "$DUE_DATE" ] && FIELDS=$(echo "$FIELDS" | jq --arg duedate "$DUE_DATE" -c '. + { duedate: $duedate }')
           [ -n "$PRIORITY" ] && FIELDS=$(echo "$FIELDS" | jq --arg priority "$PRIORITY" -c '. + { priority: { name: $priority} }')
           [ -n "$ISSUE_TYPE" ] && FIELDS=$(echo "$FIELDS" | jq --arg issuetype "$ISSUE_TYPE" -c '. + { issuetype: { name: $issuetype} }')
