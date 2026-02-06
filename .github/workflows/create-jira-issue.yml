@@ -117,10 +117,20 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           title: '[${{ steps.create.outputs.issue }}] ${{ github.event.issue.title }}'
 
+      - name: Escape Jira key for badge
+        id: jira_badge
+        run: |
+          ISSUE="${{ steps.create.outputs.issue }}"
+          ESCAPED="${ISSUE//- /--}"
+          ESCAPED="${ISSUE//-/--}"
+          echo "key=$ESCAPED" >> $GITHUB_OUTPUT
+
       - name: Add comment with Jira issue link
         uses: actions-cool/issues-helper@v3
         with:
           actions: 'create-comment'
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
-          body: 'Jira Issue Created: [${{ steps.create.outputs.issue }}](${{ secrets.JIRA_BASE_URL }}/browse/${{ steps.create.outputs.issue }})'
+          body: |
+            [![Jira ${{ steps.create.outputs.issue }}](https://img.shields.io/badge/Jira-${{ steps.jira_badge.outputs.key }}-blue?logo=jira)](${{ secrets.ANDROID_JIRA_BASE_URL }}/browse/${{ steps.create.outputs.issue }})
+            Jira Issue Created.

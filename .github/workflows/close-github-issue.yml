@@ -3,7 +3,7 @@ name: Close Github issue
 on:
   workflow_call:
     secrets:
-      ANDROID_GITHUB_ISSUE_CLOSE:
+      ANDROID_GITHUB:
         required: true
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
       - name: Find Jira key and close matching issue
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.ANDROID_GITHUB_ISSUE_CLOSE }}
+          github-token: ${{ secrets.ANDROID_GITHUB }}
           script: |
             const pr = context.payload.pull_request;
 
@@ -43,12 +43,48 @@ jobs:
               return;
             }
             
-            await github.rest.issues.createComment({
+            const { data: prData } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo : context.repo.repo,
+              pull_number: pr.number,
+            });
+            
+            const currentTitle = pr.title;
+            const jiraPrefix = `[${jiraKey}]`;
+            
+            if (!currentTitle.includes(jiraPrefix)) {
+              const newTitle = `${jiraPrefix} ${currentTitle}`;
+            
+              await github.rest.pulls.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: issue.number,
-              body: `Pull Request Merged : #${pr.number}`
+              pull_number: pr.number,
+              title: newTitle,
             });
+              core.info(`Updated PR title: ${newTitle}`);
+            } else {
+              core.info("PR title already contains Jira key. Skipping title update.");
+            }
+            
+            const originalBody = prData.body || "";
+                    
+            const marker = "<!-- linked-github-issue -->";
+            
+            if (!originalBody.includes(marker)) {
+              const newBody = `${originalBody}
+            
+            ### 🔗 Linked Issue 
+            ${marker}
+            Closed #${issue.number}        
+            `;
+            
+              await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo : context.repo.repo,
+              pull_number: pr.number,
+              body: newBody,
+            });
+            }
 
             await github.rest.issues.update({
               owner: context.repo.owner,
