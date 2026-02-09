@@ -3,6 +3,8 @@ name: Create Jira issue
 on:
   workflow_call:
     secrets:
+      ANDROID_GITHUB:
+        required: true
       ANDROID_JIRA_BASE_URL:
         required: true
       ANDROID_JIRA_API_TOKEN:
@@ -60,9 +62,18 @@ jobs:
 
           ASSIGNEE_ACCOUNT_ID=""
           case "$ASSIGNEE" in
-            "박예찬") ASSIGNEE_ACCOUNT_ID="712020:fc94f0fe-66d1-491c-9787-e96ae01b632c" ;;
-            "허세라") ASSIGNEE_ACCOUNT_ID="712020:3284d418-06e0-45ac-9074-c5f407ed6620" ;;
-            "왕혜찬") ASSIGNEE_ACCOUNT_ID="712020:6a5cb5bd-0786-4aed-ad02-11cb6f329cd6" ;;
+            "박예찬") 
+              ASSIGNEE_ACCOUNT_ID="712020:fc94f0fe-66d1-491c-9787-e96ae01b632c" 
+              GITHUB_ASSIGNEE="chandroidx"
+              ;;
+            "허세라") 
+              ASSIGNEE_ACCOUNT_ID="712020:3284d418-06e0-45ac-9074-c5f407ed6620"
+              GITHUB_ASSIGNEE="quessr"
+              ;;
+            "왕혜찬") 
+              ASSIGNEE_ACCOUNT_ID="712020:6a5cb5bd-0786-4aed-ad02-11cb6f329cd6"
+              GITHUB_ASSIGNEE="wangoose"  
+              ;;
             "") : ;; 
             *) echo "Unknown assignee name: '$ASSIGNEE' (will not set assignee)" ;;
           esac
@@ -81,7 +92,15 @@ jobs:
           [ -n "$ISSUE_TYPE" ] && FIELDS=$(echo "$FIELDS" | jq --arg issuetype "$ISSUE_TYPE" -c '. + { issuetype: { name: $issuetype} }')
           FIELDS=$(echo "$FIELDS" | jq -c '.')
           echo "fields=$FIELDS" >> $GITHUB_OUTPUT
-          
+          echo "github_assignee=$GITHUB_ASSIGNEE" >> $GITHUB_OUTPUT
+
+      - name: Add GitHub issue assignee
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'add-assignees'
+          token: ${{ secrets.ANDROID_GITHUB }}
+          issue-number: ${{ github.event.issue.number }}
+          assignees: ${{ steps.issue-fields.outputs.github_assignee }}
 
       - name: Create Issue
         id: create
