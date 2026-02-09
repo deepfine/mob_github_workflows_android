@@ -15,7 +15,7 @@ on:
 jobs:
   create-issue:
     name: Create Jira issue
-    runs-on: self-hosted
+    runs-on: self-hosted-android-jira
     steps:
       - name: Login
         uses: atlassian/gajira-login@v3

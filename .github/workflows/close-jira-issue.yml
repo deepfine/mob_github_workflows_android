@@ -13,7 +13,7 @@ on:
 jobs:
   close-issue:
     name: Close Jira issue
-    runs-on: self-hosted
+    runs-on: self-hosted-android-jira
 
     steps:
       - name: Login to Jira

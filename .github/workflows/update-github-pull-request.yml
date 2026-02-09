@@ -13,7 +13,7 @@ permissions:
 jobs:
   update-github-pull-request:
     if: ${{ github.event.pull_request.base.ref == 'develop' }}
-    runs-on: self-hosted
+    runs-on: self-hosted-android-jira
     steps:
       - name: Update pull-request's assignee and label
         uses: actions/github-script@v8
