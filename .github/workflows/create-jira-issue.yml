@@ -102,6 +102,33 @@ jobs:
           issue-number: ${{ github.event.issue.number }}
           assignees: ${{ steps.issue-fields.outputs.github_assignee }}
 
+      - name: Reset GitHub labels
+        run: |
+          KEEP_LABELS="fix feature chore refactor dependencies"
+  
+          gh label list --json name -q '.[].name' | while read label; do
+            if echo "$KEEP_LABELS" | tr ' ' '\n' | grep -qx "$label"; then
+              echo "Keeping label: $label"
+            else
+              echo "Deleting label: $label"
+              gh label delete "$label" --yes
+            fi
+          done
+          
+          gh label create "fix" --color eb423f || true
+          gh label create "feature" --color 3870e7 || true
+          gh label create "chore" --color 598c1a || true
+          gh label create "refactor" --color b043ef || true
+          gh label create "dependencies" --color 000000 || true
+
+      - name: Add GitHub issue assignee
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'add-labels'
+          token: ${{ secrets.ANDROID_GITHUB }}
+          issue-number: ${{ github.event.issue.number }}
+          labels: ${{ steps.issue-parser.outputs.issueparser_type }}
+
       - name: Create Issue
         id: create
         uses: atlassian/gajira-create@v3
