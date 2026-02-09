@@ -78,12 +78,34 @@ jobs:
             Closed #${issue.number}        
             `;
             
-              await github.rest.pulls.update({
+            await github.rest.pulls.update({
               owner: context.repo.owner,
               repo : context.repo.repo,
               pull_number: pr.number,
               body: newBody,
             });
+            }
+            
+            const issueAssignees = issue.assignees?.map(a => a.login) ?? [];
+            if (issueAssignees.length > 0) {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number, // PR도 issue
+                assignees: issueAssignees,
+              });
+            }
+
+            const issueLabels = issue.labels
+              ?.map(l => typeof l === "string" ? l : l.name)
+              .filter(Boolean) ?? [];
+            if (issueLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: issueLabels,
+              });
             }
 
             await github.rest.issues.update({
