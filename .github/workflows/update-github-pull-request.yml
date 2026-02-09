@@ -1,4 +1,4 @@
-name: Close Github issue
+name: Update Github pull-request
 
 on:
   workflow_call:
@@ -11,11 +11,11 @@ permissions:
   pull-requests: read
 
 jobs:
-  close-github-issue:
-    if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'develop' }}
+  update-github-pull-request:
+    if: ${{ github.event.pull_request.base.ref == 'develop' }}
     runs-on: self-hosted
     steps:
-      - name: Find Jira key and close matching issue
+      - name: Update pull-request's assignee and label
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.ANDROID_GITHUB }}
@@ -67,7 +67,7 @@ jobs:
             }
             
             const originalBody = prData.body || "";
-                    
+            
             const marker = "<!-- linked-github-issue -->";
             
             if (!originalBody.includes(marker)) {
@@ -91,7 +91,7 @@ jobs:
               await github.rest.issues.addAssignees({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: pr.number, // PR도 issue
+                issue_number: pr.number,
                 assignees: issueAssignees,
               });
             }
@@ -107,12 +107,3 @@ jobs:
                 labels: issueLabels,
               });
             }
-
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              state: "closed",
-            });
-
-            core.info(`Closed issue #${issue.number} matched by ${jiraKey}`);
