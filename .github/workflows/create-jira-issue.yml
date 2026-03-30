@@ -74,6 +74,9 @@ jobs:
               ASSIGNEE_ACCOUNT_ID="712020:6a5cb5bd-0786-4aed-ad02-11cb6f329cd6"
               GITHUB_ASSIGNEE="wangoose"  
               ;;
+            "남태우")
+              ASSIGNEE_ACCOUNT_ID="712020:c0fdc05d-6030-4cb0-b7ee-f64ad8b2c434"
+              GITHUB_ASSIGNEE="taewooyooo"  
             "") : ;; 
             *) echo "Unknown assignee name: '$ASSIGNEE' (will not set assignee)" ;;
           esac
