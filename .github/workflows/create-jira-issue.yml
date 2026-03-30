@@ -76,7 +76,8 @@ jobs:
               ;;
             "남태우")
               ASSIGNEE_ACCOUNT_ID="712020:c0fdc05d-6030-4cb0-b7ee-f64ad8b2c434"
-              GITHUB_ASSIGNEE="taewooyooo"  
+              GITHUB_ASSIGNEE="taewooyooo" 
+              ;;
             "") : ;; 
             *) echo "Unknown assignee name: '$ASSIGNEE' (will not set assignee)" ;;
           esac
