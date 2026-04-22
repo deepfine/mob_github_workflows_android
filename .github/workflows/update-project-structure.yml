@@ -3,9 +3,11 @@ name: Update Project Structure
 on:
   workflow_call:
 
+permissions:
+  contents: write
 
 jobs:
-  chore:
+  update-project-structure:
     runs-on: self-hosted-android
     steps:
       - name: Checkout repo
