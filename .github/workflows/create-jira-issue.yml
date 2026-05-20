@@ -99,14 +99,21 @@ jobs:
           echo "github_assignee=$GITHUB_ASSIGNEE" >> $GITHUB_OUTPUT
 
       - name: Add GitHub issue assignee
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'add-assignees'
-          token: ${{ secrets.ANDROID_GITHUB }}
-          issue-number: ${{ github.event.issue.number }}
-          assignees: ${{ steps.issue-fields.outputs.github_assignee }}
+        if: ${{ steps.issue-fields.outputs.github_assignee != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_GITHUB }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ASSIGNEE: ${{ steps.issue-fields.outputs.github_assignee }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/assignees" \
+            -f "assignees[]=${ASSIGNEE}"
 
       - name: Reset GitHub labels
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_GITHUB }}
         run: |
           KEEP_LABELS="fix feature chore refactor dependencies"
   
@@ -125,13 +132,18 @@ jobs:
           gh label create "refactor" --color b043ef || true
           gh label create "dependencies" --color 000000 || true
 
-      - name: Add GitHub issue assignee
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'add-labels'
-          token: ${{ secrets.ANDROID_GITHUB }}
-          issue-number: ${{ github.event.issue.number }}
-          labels: ${{ steps.issue-parser.outputs.issueparser_type }}
+      - name: Add GitHub issue label
+        if: ${{ steps.issue-parser.outputs.issueparser_type != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_GITHUB }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          LABEL: ${{ steps.issue-parser.outputs.issueparser_type }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/labels" \
+            -f "labels[]=${LABEL}"
 
       - name: Create Issue
         id: create
@@ -161,11 +173,16 @@ jobs:
           git push origin "${BRANCH_NAME}"
 
       - name: Update issue title
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'update-issue'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: '[${{ steps.create.outputs.issue }}] ${{ github.event.issue.title }}'
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_GITHUB }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: '[${{ steps.create.outputs.issue }}] ${{ github.event.issue.title }}'
+        run: |
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}" \
+            -f "title=${ISSUE_TITLE}"
 
       - name: Escape Jira key for badge
         id: jira_badge
@@ -176,11 +193,23 @@ jobs:
           echo "key=$ESCAPED" >> $GITHUB_OUTPUT
 
       - name: Add comment with Jira issue link
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'create-comment'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            [![Jira ${{ steps.create.outputs.issue }}](https://img.shields.io/badge/Jira-${{ steps.jira_badge.outputs.key }}-blue?logo=jira)](${{ secrets.ANDROID_JIRA_BASE_URL }}/browse/${{ steps.create.outputs.issue }})
-            Jira Issue Created.
+        env:
+          GH_TOKEN: ${{ secrets.ANDROID_GITHUB }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          JIRA_BASE_URL: ${{ secrets.ANDROID_JIRA_BASE_URL }}
+          JIRA_ISSUE: ${{ steps.create.outputs.issue }}
+          JIRA_BADGE_KEY: ${{ steps.jira_badge.outputs.key }}
+        run: |
+          BODY=$(cat <<EOF
+          [![Jira ${JIRA_ISSUE}](https://img.shields.io/badge/Jira-${JIRA_BADGE_KEY}-blue?logo=jira)](${JIRA_BASE_URL}/browse/${JIRA_ISSUE})
+          Jira Issue Created.
+          EOF
+          )
+
+          jq -nc --arg body "$BODY" '{body: $body}' > comment.json
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
+            --input comment.json
