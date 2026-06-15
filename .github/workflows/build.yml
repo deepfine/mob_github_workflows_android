@@ -3,21 +3,33 @@ name: Check and Build
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
+env:
+  JAVA_DISTRIBUTION: zulu
+  JAVA_VERSION: "17"
+  PROJECT_STRUCTURE_BRANCH: github-actions/update-project-structure
+
 jobs:
   lint:
     name: Spotless check
     runs-on: self-hosted-android
     steps:
-      - name: Check out code
+      - &checkout
+        name: Check out code
         uses: actions/checkout@v6
 
-      - name: Set up JDK
+      - &setup-jdk
+        name: Set up JDK
         uses: actions/setup-java@v5
         with:
-          distribution: zulu
-          java-version: 17
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
 
-      - name: Make Gradle executable
+      - &prepare-gradle
+        name: Prepare Gradle wrapper
         run: |
           tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
           chmod +x ./gradlew
@@ -27,50 +39,28 @@ jobs:
 
   test:
     needs: lint
-    if: ${{ needs.lint.result == 'success' }}
     runs-on: self-hosted-android
     steps:
-      - name: Check out code
-        uses: actions/checkout@v6
+      - *checkout
+      - *setup-jdk
 
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
-
-      - name: Setup Android SDK
+      - &setup-android
+        name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Make Gradle executable
-        run: |
-          tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
-          chmod +x ./gradlew
+      - *prepare-gradle
 
       - name: Test
         run: ./gradlew test
 
   build:
     needs: test
-    if: ${{ needs.test.result == 'success' }}
     runs-on: self-hosted-android
     steps:
-      - name: Check out code
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Make Gradle executable
-        run: |
-          tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
-          chmod +x ./gradlew
+      - *checkout
+      - *setup-jdk
+      - *setup-android
+      - *prepare-gradle
 
       - name: Build with Gradle
         run: ./gradlew buildDevDebug
