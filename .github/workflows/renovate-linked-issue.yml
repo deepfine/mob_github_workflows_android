@@ -22,17 +22,16 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: write
 
 jobs:
-  create-linked-issue:
+  manage-linked-issue:
     if: ${{ github.event.pull_request.user.login == inputs.renovate_bot_login }}
     runs-on: self-hosted-android
     concurrency:
       group: renovate-linked-issue-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     steps:
-      - name: Create and link issue
+      - name: Manage linked issue
         uses: actions/github-script@v8
         env:
           ISSUE_LABELS: ${{ inputs.issue_labels }}
@@ -47,6 +46,7 @@ jobs:
 
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const action = context.payload.action;
             const marker = `<!-- renovate-linked-pr:${owner}/${repo}#${pr.number} -->`;
 
             let linkedIssue;
@@ -64,6 +64,27 @@ jobs:
               );
 
               if (response.data.length < 100) break;
+            }
+
+            if (action === "closed") {
+              if (!linkedIssue) {
+                core.warning(`No linked issue found for PR #${pr.number}.`);
+                return;
+              }
+
+              if (linkedIssue.state === "open") {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: linkedIssue.number,
+                  state: "closed",
+                  state_reason: pr.merged ? "completed" : "not_planned",
+                });
+                core.info(`Closed issue #${linkedIssue.number}.`);
+              } else {
+                core.info(`Issue #${linkedIssue.number} is already closed.`);
+              }
+              return;
             }
 
             if (!linkedIssue) {
@@ -115,22 +136,46 @@ jobs:
               core.info(`Reusing issue #${linkedIssue.number}.`);
             }
 
-            const linkMarker = "<!-- renovate-linked-issue -->";
-            if (!(pr.body || "").includes(linkMarker)) {
-              const linkedSection = [
-                linkMarker,
-                "### Linked issue",
-                `Closes #${linkedIssue.number}`,
-              ].join("\n");
-              const body = [pr.body || "", linkedSection]
-                .filter(Boolean)
-                .join("\n\n");
-
-              await github.rest.pulls.update({
+            if (action === "reopened" && linkedIssue.state === "closed") {
+              await github.rest.issues.update({
                 owner,
                 repo,
-                pull_number: pr.number,
+                issue_number: linkedIssue.number,
+                state: "open",
+                state_reason: "reopened",
+              });
+              core.info(`Reopened issue #${linkedIssue.number}.`);
+            }
+
+            const commentMarker = "<!-- renovate-linked-issue-comment -->";
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner,
+                repo,
+                issue_number: pr.number,
+                per_page: 100,
+              }
+            );
+            const linkedComment = comments.find((comment) =>
+              comment.body?.includes(commentMarker)
+            );
+
+            if (!linkedComment) {
+              const body = [
+                commentMarker,
+                `Related issue: #${linkedIssue.number}`,
+                "",
+                "The issue will be closed automatically when this pull request is closed.",
+              ].join("\n");
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
                 body,
               });
-              core.info(`Linked issue #${linkedIssue.number} from PR #${pr.number}.`);
+              core.info(`Commented issue #${linkedIssue.number} on PR #${pr.number}.`);
+            } else {
+              core.info(`Linked issue comment already exists on PR #${pr.number}.`);
             }
