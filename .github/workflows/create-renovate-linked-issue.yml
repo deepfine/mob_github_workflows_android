@@ -1,0 +1,136 @@
+name: Create issue for Renovate PR
+
+on:
+  workflow_call:
+    inputs:
+      renovate_bot_login:
+        description: GitHub login used by Renovate
+        required: false
+        type: string
+        default: "renovate[bot]"
+      issue_title_prefix:
+        description: Prefix added to the linked issue title
+        required: false
+        type: string
+        default: "[Dependency]"
+      issue_labels:
+        description: Comma-separated labels to add when they exist in the caller repository
+        required: false
+        type: string
+        default: "dependencies"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  create-linked-issue:
+    if: ${{ github.event.pull_request.user.login == inputs.renovate_bot_login }}
+    runs-on: self-hosted-android
+    concurrency:
+      group: renovate-linked-issue-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Create and link issue
+        uses: actions/github-script@v8
+        env:
+          ISSUE_LABELS: ${{ inputs.issue_labels }}
+          ISSUE_TITLE_PREFIX: ${{ inputs.issue_title_prefix }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("This workflow must be called from a pull_request_target event.");
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const marker = `<!-- renovate-linked-pr:${owner}/${repo}#${pr.number} -->`;
+
+            let linkedIssue;
+            for (let page = 1; !linkedIssue; page += 1) {
+              const response = await github.rest.issues.listForRepo({
+                owner,
+                repo,
+                state: "all",
+                per_page: 100,
+                page,
+              });
+
+              linkedIssue = response.data.find((item) =>
+                !item.pull_request && item.body?.includes(marker)
+              );
+
+              if (response.data.length < 100) break;
+            }
+
+            if (!linkedIssue) {
+              const requestedLabels = (process.env.ISSUE_LABELS || "")
+                .split(",")
+                .map((label) => label.trim())
+                .filter(Boolean);
+              const labelsInRepository = await github.paginate(
+                github.rest.issues.listLabelsForRepo,
+                { owner, repo, per_page: 100 }
+              );
+              const existingLabelNames = new Set(
+                labelsInRepository.map((label) => label.name)
+              );
+              const labels = requestedLabels.filter((label) =>
+                existingLabelNames.has(label)
+              );
+              const missingLabels = requestedLabels.filter((label) =>
+                !existingLabelNames.has(label)
+              );
+
+              if (missingLabels.length > 0) {
+                core.warning(`Skipped missing labels: ${missingLabels.join(", ")}`);
+              }
+
+              const prefix = (process.env.ISSUE_TITLE_PREFIX || "").trim();
+              const title = [prefix, pr.title].filter(Boolean).join(" ");
+              const body = [
+                marker,
+                "## Renovate dependency update",
+                "",
+                `- Pull request: #${pr.number}`,
+                `- Branch: \`${pr.head.ref}\``,
+                `- Author: @${pr.user.login}`,
+                "",
+                "This issue is completed automatically when the linked pull request is merged.",
+              ].join("\n");
+
+              const response = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels,
+              });
+              linkedIssue = response.data;
+              core.info(`Created issue #${linkedIssue.number}.`);
+            } else {
+              core.info(`Reusing issue #${linkedIssue.number}.`);
+            }
+
+            const linkMarker = "<!-- renovate-linked-issue -->";
+            if (!(pr.body || "").includes(linkMarker)) {
+              const linkedSection = [
+                linkMarker,
+                "### Linked issue",
+                `Closes #${linkedIssue.number}`,
+              ].join("\n");
+              const body = [pr.body || "", linkedSection]
+                .filter(Boolean)
+                .join("\n\n");
+
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pr.number,
+                body,
+              });
+              core.info(`Linked issue #${linkedIssue.number} from PR #${pr.number}.`);
+            }
