@@ -10,7 +10,7 @@ permissions:
 env:
   JAVA_DISTRIBUTION: zulu
   JAVA_VERSION: "21"
-  GPR_TOKEN: ${{ secrets.SCANNER_PACKAGES_TOKEN }}
+  GPR_TOKEN: ${{ secrets.ANDROID_GITHUB_PACKAGES }}
 
 jobs:
   lint:
