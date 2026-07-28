@@ -2,9 +2,13 @@ name: Generated AAB
 
 env:
   main_project_module: app
-
+  GPR_TOKEN: ${{ secrets.ANDROID_GITHUB_PACKAGES }}
 on:
   workflow_call:
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   build:
