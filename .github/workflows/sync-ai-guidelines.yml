@@ -1,0 +1,164 @@
+name: Sync AI Guidelines
+
+on:
+  workflow_call:
+    inputs:
+      guideline_ref:
+        description: Branch, tag, or commit SHA of the common AI guidelines
+        required: false
+        type: string
+        default: main
+      pr_labels:
+        description: Comma-separated labels for the synchronization pull request
+        required: false
+        type: string
+        default: improvement
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Synchronize guidelines
+    runs-on: self-hosted-android
+    concurrency:
+      group: sync-ai-guidelines-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v6
+
+      - name: Check out common guidelines
+        uses: actions/checkout@v6
+        with:
+          repository: deepfine/deepfine-ai-guideline
+          ref: ${{ inputs.guideline_ref }}
+          token: ${{ secrets.ANDROID_GITHUB || github.token }}
+          path: .ai-guidelines-source
+          persist-credentials: false
+
+      - name: Apply common guidelines
+        id: sync
+        uses: actions/github-script@v8
+        env:
+          GUIDELINE_ROOT: .ai-guidelines-source
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const workspace = path.resolve(process.env.GITHUB_WORKSPACE);
+            const sourceRoot = path.resolve(workspace, process.env.GUIDELINE_ROOT);
+
+            function assertWithin(root, candidate, label) {
+              const relative = path.relative(root, candidate);
+              if (
+                relative === "" ||
+                relative.startsWith("..") ||
+                path.isAbsolute(relative)
+              ) {
+                throw new Error(`${label} must stay within ${root}`);
+              }
+            }
+
+            const mappings = [
+              {
+                source: "native/.agents/plugins/android-ai-guideline/docs",
+                target: "docs",
+              },
+              {
+                source: "native/.agents/plugins/android-ai-guideline/skills",
+                target: ".agents/skills",
+              },
+              {
+                source: "native/.agents/plugins/android-ai-guideline/AGENTS.md",
+                target: "AGENTS.md",
+              },
+            ];
+
+            const managedPaths = [];
+            for (const mapping of mappings) {
+              const targetPath = mapping.target;
+              const source = path.resolve(sourceRoot, mapping.source);
+              const target = path.resolve(workspace, targetPath);
+              assertWithin(sourceRoot, source, `Source path '${mapping.source}'`);
+              assertWithin(workspace, target, `Target path '${targetPath}'`);
+              if (
+                target === sourceRoot ||
+                target.startsWith(`${sourceRoot}${path.sep}`) ||
+                target === path.resolve(workspace, ".git") ||
+                target.startsWith(`${path.resolve(workspace, ".git")}${path.sep}`)
+              ) {
+                throw new Error(`Target path is reserved: ${targetPath}`);
+              }
+
+              if (!fs.existsSync(source)) {
+                throw new Error(`Guideline source not found: ${mapping.source}`);
+              }
+
+              fs.rmSync(target, { recursive: true, force: true });
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              fs.cpSync(source, target, {
+                recursive: true,
+                force: true,
+                errorOnExist: false,
+              });
+              managedPaths.push(targetPath);
+            }
+
+            core.info(`Synchronized ${managedPaths.length} managed path(s).`);
+            core.setOutput("managed_paths", managedPaths.join("\n"));
+
+      - name: Remove guideline checkout
+        run: rm -rf .ai-guidelines-source
+
+      - name: Detect synchronized changes
+        id: changes
+        shell: bash
+        env:
+          MANAGED_PATHS: ${{ steps.sync.outputs.managed_paths }}
+        run: |
+          changed_files=""
+          has_changes=false
+
+          while IFS= read -r managed_path; do
+            [ -n "$managed_path" ] || continue
+            path_changes="$(git status --short -- "$managed_path")"
+            if [ -n "$path_changes" ]; then
+              has_changes=true
+              changed_files="${changed_files}${path_changes}"$'\n'
+            fi
+          done <<< "$MANAGED_PATHS"
+
+          {
+            echo "changed_files<<EOF"
+            printf '%s' "$changed_files"
+            echo "EOF"
+            echo "has_changes=$has_changes"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update synchronization pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ github.token }}
+          branch: automation/sync-ai-guidelines
+          delete-branch: true
+          commit-message: "chore($project): AI 지침 동기화"
+          title: "chore($project): AI 지침 동기화"
+          body: |
+            ## 동기화 정보
+
+            - 중앙 저장소: `deepfine/deepfine-ai-guideline`
+            - 기준 버전: `${{ inputs.guideline_ref }}`
+            - [중앙 변경 이력](${{ github.server_url }}/deepfine/deepfine-ai-guideline/blob/${{ inputs.guideline_ref }}/CHANGELOG.md)
+
+            ## 변경 파일
+
+            ```text
+            ${{ steps.changes.outputs.changed_files }}
+            ```
+
+            중앙 AI 지침 동기화 결과 검토 및 CODEOWNERS 승인 필요.
+          labels: ${{ inputs.pr_labels }}
