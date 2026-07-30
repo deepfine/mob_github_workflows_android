@@ -27,7 +27,7 @@ permissions:
 jobs:
   manage-linked-issue:
     if: ${{ github.event.pull_request.user.login == inputs.renovate_bot_login }}
-    runs-on: self-hosted-android
+    runs-on: self-hosted-android-renovate
     concurrency:
       group: renovate-linked-issue-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: false
