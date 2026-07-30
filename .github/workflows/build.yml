@@ -35,7 +35,7 @@ jobs:
           chmod +x ./gradlew
 
       - name: Spotless
-        run: ./gradlew spotlessCheck
+        run: ./gradlew spotlessCheck --no-parallel
 
   test:
     needs: lint
