@@ -12,7 +12,7 @@ on:
         description: Prefix added to the linked issue title
         required: false
         type: string
-        default: "[Dependency]"
+        default: "[Android]"
       issue_labels:
         description: Comma-separated labels to add when they exist in the caller repository
         required: false
